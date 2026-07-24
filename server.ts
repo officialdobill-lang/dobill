@@ -3594,7 +3594,9 @@ Thank you for choosing DO BILL.
 
     // Enforce strict stock validation for all sale items
     for (const item of sale.items) {
-      const prod = db.prepare('SELECT stockQuantity, stock_quantity, name FROM products WHERE (id = ? OR product_id = ?) AND workspace_owner = ?').get(item.id, item.id, owner) as { stockQuantity: number, stock_quantity: number, name: string } | undefined;
+      const prodId = item.id || item.product_id;
+      const barcode = item.barcode || prodId;
+      const prod = db.prepare('SELECT stockQuantity, stock_quantity, name FROM products WHERE (id = ? OR product_id = ? OR barcode = ?) AND workspace_owner = ?').get(prodId, prodId, barcode, owner) as { stockQuantity: number, stock_quantity: number, name: string } | undefined;
       const available = prod ? (prod.stockQuantity !== undefined && prod.stockQuantity !== null ? prod.stockQuantity : (prod.stock_quantity ?? 0)) : 0;
       if (!prod || available < item.quantity) {
         res.status(400).json({ 
@@ -3629,15 +3631,16 @@ Thank you for choosing DO BILL.
         owner
       );
 
-      // Deduct Stock from both stockQuantity and stock_quantity columns
+      // Deduct Stock from product
       const updateStock = db.prepare(`
         UPDATE products 
-        SET stockQuantity = stockQuantity - ?,
-            stock_quantity = stock_quantity - ?
-        WHERE (id = ? OR product_id = ?) AND workspace_owner = ?
+        SET stockQuantity = stockQuantity - ?
+        WHERE (id = ? OR product_id = ? OR barcode = ?) AND workspace_owner = ?
       `);
       sale.items.forEach((item: any) => {
-        updateStock.run(item.quantity, item.quantity, item.id, item.id, owner);
+        const prodId = item.id || item.product_id;
+        const barcode = item.barcode || prodId;
+        updateStock.run(item.quantity, prodId, prodId, barcode, owner);
       });
 
       return { id, invoiceNumber, createdAt };
@@ -3690,15 +3693,17 @@ Thank you for choosing DO BILL.
         );
 
         // Update Stock of the products (Purchasing items INCREMENTS stock_quantity!)
-        const updateStock = db.prepare('UPDATE products SET stockQuantity = stockQuantity + ?, stock_quantity = stock_quantity + ? WHERE (id = ? OR product_id = ?) AND workspace_owner = ?');
+        const updateStock = db.prepare('UPDATE products SET stockQuantity = stockQuantity + ? WHERE (id = ? OR product_id = ? OR barcode = ?) AND workspace_owner = ?');
         
         // Let's also update the product's purchasePrice to the latest purchase price entered on-the-fly!
-        const updatePurchasePrice = db.prepare('UPDATE products SET purchasePrice = ?, purchase_price = ? WHERE (id = ? OR product_id = ?) AND workspace_owner = ?');
+        const updatePurchasePrice = db.prepare('UPDATE products SET purchasePrice = ? WHERE (id = ? OR product_id = ? OR barcode = ?) AND workspace_owner = ?');
 
         purchase.items.forEach((item: any) => {
-          updateStock.run(item.quantity, item.quantity, item.id, item.id, owner);
+          const prodId = item.id || item.product_id;
+          const barcode = item.barcode || prodId;
+          updateStock.run(item.quantity, prodId, prodId, barcode, owner);
           if (item.purchasePrice > 0) {
-            updatePurchasePrice.run(item.purchasePrice, item.purchasePrice, item.id, item.id, owner);
+            updatePurchasePrice.run(item.purchasePrice, prodId, prodId, barcode, owner);
           }
         });
 
