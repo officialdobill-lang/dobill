@@ -9,7 +9,6 @@ import { Switch } from "@/components/ui/switch";
 import { DataService, ShopDetails } from "@/services/dataService";
 import { toast } from "sonner";
 import { safeSessionStorage, safeLocalStorage } from "@/utils/safeStorage";
-import ReceiptSettings from "@/components/ReceiptSettings";
 
 const sessionStorage = safeSessionStorage;
 const localStorage = safeLocalStorage;
@@ -101,7 +100,7 @@ export default function ShopSettings() {
     allowBelowStock: false,
   });
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"shop" | "receipts" | "user" | "gmail">(
+  const [activeTab, setActiveTab] = useState<"shop" | "user" | "gmail">(
     "shop",
   );
   const [userRole, setUserRole] = useState<"Admin" | "Manager" | "Cashier">(
@@ -678,36 +677,22 @@ export default function ShopSettings() {
       {/* Tab Selectors */}
       <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm gap-1">
         {ability?.can("read", "ShopDetails") && (
-          <>
-            <button
-              onClick={() => setActiveTab("shop")}
-              className={`flex-1 py-3 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === "shop"
-                  ? "bg-primary text-white shadow-md"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              }`}
-            >
-              <Store className="h-4 w-4 shrink-0" />
-              <span className="truncate">Shop Settings</span>
-              {!canManageShop && (
-                <span className="text-[9px] bg-amber-100 text-amber-800 font-extrabold uppercase px-1.5 py-0.5 rounded tracking-normal block shrink-0">
-                  Read-Only
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab("receipts")}
-              className={`flex-1 py-3 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === "receipts"
-                  ? "bg-primary text-white shadow-md"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              }`}
-            >
-              <FileText className="h-4 w-4 shrink-0" />
-              <span className="truncate">Receipt Templates</span>
-            </button>
-          </>
+          <button
+            onClick={() => setActiveTab("shop")}
+            className={`flex-1 py-3 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === "shop"
+                ? "bg-primary text-white shadow-md"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+            }`}
+          >
+            <Store className="h-4 w-4 shrink-0" />
+            <span className="truncate">Shop Settings</span>
+            {!canManageShop && (
+              <span className="text-[9px] bg-amber-100 text-amber-800 font-extrabold uppercase px-1.5 py-0.5 rounded tracking-normal block shrink-0">
+                Read-Only
+              </span>
+            )}
+          </button>
         )}
         <button
           onClick={() => setActiveTab("user")}
@@ -904,31 +889,6 @@ export default function ShopSettings() {
 
 
 
-              {/* Quick Link to Receipt Templates */}
-              <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shrink-0">
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black uppercase text-blue-900 tracking-wider">
-                      Custom Receipt Templates (Barcodes & Simple)
-                    </div>
-                    <div className="text-[11px] text-blue-700 font-medium mt-0.5">
-                      Create new receipt items, edit custom header/footer texts, and toggle receipt elements. Page size is locked to Auto Roll.
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => setActiveTab("receipts")}
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-wider rounded-xl shrink-0 self-end sm:self-auto"
-                >
-                  Manage Receipts
-                </Button>
-              </div>
-
               {canManageShop && (
                 <div className="space-y-4 pt-6 border-t border-slate-150">
                   <Button
@@ -943,13 +903,6 @@ export default function ShopSettings() {
           </Card>
 
 
-        </div>
-      )}
-
-      {/* RECEIPT TEMPLATES PANEL */}
-      {activeTab === "receipts" && (
-        <div className="animate-fade-in">
-          <ReceiptSettings />
         </div>
       )}
 
