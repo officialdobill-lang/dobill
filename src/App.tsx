@@ -1990,7 +1990,7 @@ const AppContent = () => {
             : 'overflow-y-auto overflow-x-hidden p-4 sm:p-8 pb-24 lg:pb-8'
         }`}>
           <Routes>
-            <Route path="/" element={<Dashboard setLowStock={() => {}} />} />
+            <Route path="/" element={<Dashboard />} />
             <Route path="/pos" element={<POS />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/history" element={<SalesHistory />} />
