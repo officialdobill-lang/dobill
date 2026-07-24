@@ -1620,28 +1620,29 @@ async function startServer() {
     const activeVal = (headerOwner && typeof headerOwner === 'string' && headerOwner.trim().length > 0) ? headerOwner.trim().toLowerCase() : '';
     const authEmail = (headerAuth && typeof headerAuth === 'string' && headerAuth.trim().length > 0) ? headerAuth.trim().toLowerCase() : '';
 
-    if (activeVal && activeVal !== 'admin@dobill.com') {
-      // If user is accessing their own workspace
-      if (!authEmail || authEmail === activeVal) {
-        return activeVal;
-      }
-      // Check if authEmail is approved colleague for activeVal workspace
-      try {
-        const approved = db.prepare("SELECT * FROM access_requests WHERE email = ? AND owner_email = ? AND status = 'approved'").get(authEmail, activeVal);
-        if (approved) {
-          return activeVal;
-        }
-      } catch (e) {}
-      // Unauthorized cross-workspace attempt: force authEmail's own workspace
-      return authEmail || activeVal;
-    }
-
+    // If an explicit logged in user email is present:
     if (authEmail && authEmail !== 'admin@dobill.com') {
+      // If user is requesting access to a different target workspace (activeVal):
+      if (activeVal && activeVal !== authEmail && activeVal !== 'admin@dobill.com') {
+        try {
+          const approved = db.prepare("SELECT * FROM access_requests WHERE email = ? AND owner_email = ? AND status = 'approved'").get(authEmail, activeVal);
+          if (approved) {
+            return activeVal;
+          }
+        } catch (e) {}
+        // Unauthorized cross-workspace attempt -> force user's own workspace
+        return authEmail;
+      }
       return authEmail;
     }
 
-    const master = getMasterOwnerEmail();
-    return master || activeVal || authEmail || 'admin@dobill.com';
+    // Unauthenticated user or default guest/admin session:
+    if (activeVal && activeVal !== 'admin@dobill.com') {
+      // Trying to access another user's workspace without authentication -> block access
+      return 'admin@dobill.com';
+    }
+
+    return 'admin@dobill.com';
   };
 
   // Helper to resolve authenticated user email
@@ -1651,8 +1652,7 @@ async function startServer() {
     if (activeVal && activeVal !== 'admin@dobill.com') {
       return activeVal;
     }
-    const master = getMasterOwnerEmail();
-    return master || activeVal || 'admin@dobill.com';
+    return 'admin@dobill.com';
   };
 
   // Helper to verify & automatically seed new workspace databases on the fly
