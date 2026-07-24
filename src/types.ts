@@ -16,6 +16,7 @@ export interface Product {
 
 export interface CartItem extends Product {
   quantity: number;
+  discountPercent?: number;
 }
 
 export interface PurchaseItem {
