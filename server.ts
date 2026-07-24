@@ -655,28 +655,100 @@ class PureJSSQLite {
                 assignments.forEach(assignment => {
                   const parts = assignment.split('=');
                   if (parts.length >= 2) {
-                    const colName = parts[0].trim().toLowerCase();
-                    const expr = parts.slice(1).join('=').trim();
+                    const colNameRaw = parts[0].trim();
+                    const colNameLower = colNameRaw.toLowerCase();
+                    let expr = parts.slice(1).join('=').trim();
+
+                    // Strip MAX(0, ... ) wrappers if present
+                    if (expr.toUpperCase().startsWith('MAX(0,')) {
+                      const commaIdx = expr.indexOf(',');
+                      if (commaIdx !== -1) {
+                        expr = expr.substring(commaIdx + 1, expr.lastIndexOf(')')).trim();
+                      }
+                    }
+                    // Strip COALESCE(..., 0) wrappers if present
+                    if (expr.toUpperCase().startsWith('COALESCE(')) {
+                      const inner = expr.substring(9, expr.lastIndexOf(')'));
+                      const firstVal = inner.split(',')[0].trim();
+                      const rest = expr.substring(expr.lastIndexOf(')') + 1);
+                      expr = firstVal + rest;
+                    }
 
                     if (expr.includes(' - ') || expr.includes(' + ')) {
-                      const matchMath = expr.match(/([a-zA-Z0-9_]+)\s*([-+])\s*(.*)/);
+                      const matchMath = expr.match(/([a-zA-Z0-9_.]+)\s*([-+])\s*(.*)/);
                       if (matchMath) {
                         const baseCol = matchMath[1].trim().toLowerCase();
                         const sign = matchMath[2].trim();
                         const rightExpr = matchMath[3].trim();
 
-                        const rightVal = resolveValueExpr(rightExpr, row, params);
-                        const currentVal = row[baseCol] ?? 0;
+                        const rightVal = resolveValueExpr(rightExpr, row, params) ?? 0;
+                        const currentVal = (resolveValueExpr(baseCol, row, params) ?? 0) as number;
+
+                        let newVal = 0;
                         if (sign === '-') {
-                          row[colName] = Math.max(0, currentVal - rightVal);
+                          newVal = Math.max(0, Number(currentVal) - Number(rightVal));
                         } else {
-                          row[colName] = currentVal + rightVal;
+                          newVal = Number(currentVal) + Number(rightVal);
+                        }
+
+                        let setAny = false;
+                        for (const k of Object.keys(row)) {
+                          if (k.toLowerCase() === colNameLower) {
+                            row[k] = newVal;
+                            setAny = true;
+                          }
+                        }
+                        if (!setAny) {
+                          row[colNameRaw] = newVal;
+                        }
+
+                        // Synchronize stock quantity across all camelCase and snake_case variants
+                        if (colNameLower === 'stockquantity' || colNameLower === 'stock_quantity') {
+                          row['stockQuantity'] = newVal;
+                          row['stock_quantity'] = newVal;
+                          row['stockquantity'] = newVal;
+                        }
+                        if (colNameLower === 'purchaseprice' || colNameLower === 'purchase_price') {
+                          row['purchasePrice'] = newVal;
+                          row['purchase_price'] = newVal;
+                          row['purchaseprice'] = newVal;
+                        }
+                        if (colNameLower === 'sellingprice' || colNameLower === 'selling_price') {
+                          row['sellingPrice'] = newVal;
+                          row['selling_price'] = newVal;
+                          row['sellingprice'] = newVal;
                         }
                         return;
                       }
                     }
 
-                    row[colName] = resolveValueExpr(expr, row, params);
+                    const computedVal = resolveValueExpr(expr, row, params);
+                    let setAny = false;
+                    for (const k of Object.keys(row)) {
+                      if (k.toLowerCase() === colNameLower) {
+                        row[k] = computedVal;
+                        setAny = true;
+                      }
+                    }
+                    if (!setAny) {
+                      row[colNameRaw] = computedVal;
+                    }
+
+                    if (colNameLower === 'stockquantity' || colNameLower === 'stock_quantity') {
+                      row['stockQuantity'] = computedVal;
+                      row['stock_quantity'] = computedVal;
+                      row['stockquantity'] = computedVal;
+                    }
+                    if (colNameLower === 'purchaseprice' || colNameLower === 'purchase_price') {
+                      row['purchasePrice'] = computedVal;
+                      row['purchase_price'] = computedVal;
+                      row['purchaseprice'] = computedVal;
+                    }
+                    if (colNameLower === 'sellingprice' || colNameLower === 'selling_price') {
+                      row['sellingPrice'] = computedVal;
+                      row['selling_price'] = computedVal;
+                      row['sellingprice'] = computedVal;
+                    }
                   }
                 });
                 updatedRows.push(row);
@@ -3560,8 +3632,8 @@ Thank you for choosing DO BILL.
       // Deduct Stock from both stockQuantity and stock_quantity columns
       const updateStock = db.prepare(`
         UPDATE products 
-        SET stockQuantity = MAX(0, COALESCE(stockQuantity, 0) - ?),
-            stock_quantity = MAX(0, COALESCE(stock_quantity, 0) - ?)
+        SET stockQuantity = stockQuantity - ?,
+            stock_quantity = stock_quantity - ?
         WHERE (id = ? OR product_id = ?) AND workspace_owner = ?
       `);
       sale.items.forEach((item: any) => {
@@ -3575,6 +3647,7 @@ Thank you for choosing DO BILL.
     // Execute rolling retention policy
     runRetentionPolicy();
     broadcastSyncEvent('sales', owner);
+    broadcastSyncEvent('products', owner);
     res.json({ ...sale, ...result });
   });
 
@@ -3617,15 +3690,15 @@ Thank you for choosing DO BILL.
         );
 
         // Update Stock of the products (Purchasing items INCREMENTS stock_quantity!)
-        const updateStock = db.prepare('UPDATE products SET stockQuantity = stockQuantity + ? WHERE id = ? AND workspace_owner = ?');
+        const updateStock = db.prepare('UPDATE products SET stockQuantity = stockQuantity + ?, stock_quantity = stock_quantity + ? WHERE (id = ? OR product_id = ?) AND workspace_owner = ?');
         
         // Let's also update the product's purchasePrice to the latest purchase price entered on-the-fly!
-        const updatePurchasePrice = db.prepare('UPDATE products SET purchasePrice = ? WHERE id = ? AND workspace_owner = ?');
+        const updatePurchasePrice = db.prepare('UPDATE products SET purchasePrice = ?, purchase_price = ? WHERE (id = ? OR product_id = ?) AND workspace_owner = ?');
 
         purchase.items.forEach((item: any) => {
-          updateStock.run(item.quantity, item.id, owner);
+          updateStock.run(item.quantity, item.quantity, item.id, item.id, owner);
           if (item.purchasePrice > 0) {
-            updatePurchasePrice.run(item.purchasePrice, item.id, owner);
+            updatePurchasePrice.run(item.purchasePrice, item.purchasePrice, item.id, item.id, owner);
           }
         });
 
@@ -3634,6 +3707,7 @@ Thank you for choosing DO BILL.
 
       const result = transaction();
       broadcastSyncEvent('purchases', owner);
+      broadcastSyncEvent('products', owner);
       res.json({ ...purchase, ...result });
     } catch (err: any) {
       console.error("[API Error] Failed to process purchase:", err);
