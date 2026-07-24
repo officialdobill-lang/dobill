@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShoppingCart, Package, TrendingUp, AlertTriangle, IndianRupee } from 'lucide-react';
+import { ShoppingCart, Package, TrendingUp, AlertTriangle, IndianRupee, FileText, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 import { DataService } from '@/services/dataService';
 import { subDays, format, eachDayOfInterval, isSameDay, startOfDay } from 'date-fns';
@@ -174,6 +175,39 @@ export default function Dashboard() {
         <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-2xl border border-emerald-100/65 text-emerald-700 w-full sm:w-auto justify-center">
           <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
           <span className="text-[10px] font-black uppercase tracking-widest leading-none">POS Active & Connected</span>
+        </div>
+      </div>
+
+      {/* System Blueprint Quick Banner */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-[2rem] p-5 sm:p-6 text-white shadow-md border border-slate-800">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-400/30 flex items-center justify-center shrink-0">
+              <FileText className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-indigo-500/30 text-indigo-300 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-indigo-400/30">
+                  Full Project Blueprint (8 Points Set)
+                </span>
+                <span className="text-emerald-400 text-[10px] font-extrabold flex items-center gap-1">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Isolated & Secure
+                </span>
+              </div>
+              <h3 className="text-sm sm:text-base font-black uppercase tracking-tight text-white mt-1">
+                PRD, TRD, App Flow, Schema & Multi-Account Docs
+              </h3>
+            </div>
+          </div>
+
+          <Link
+            to="/blueprint"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md shadow-indigo-600/30 shrink-0"
+            style={{ textDecoration: 'none' }}
+          >
+            <span>Explore Blueprint</span>
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
 
