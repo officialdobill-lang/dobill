@@ -1819,10 +1819,11 @@ async function startServer() {
       let purchasesCount = 0;
 
       try {
-        productsCount = (db.prepare("SELECT count(*) as count FROM products").get() as any)?.count || 0;
-        salesCount = (db.prepare("SELECT count(*) as count FROM sales").get() as any)?.count || 0;
-        usersCount = (db.prepare("SELECT count(*) as count FROM app_users").get() as any)?.count || 0;
-        purchasesCount = (db.prepare("SELECT count(*) as count FROM purchases").get() as any)?.count || 0;
+        const owner = getWorkspaceOwner(req);
+        productsCount = (db.prepare("SELECT count(*) as count FROM products WHERE workspace_owner = ?").get(owner) as any)?.count || 0;
+        salesCount = (db.prepare("SELECT count(*) as count FROM sales WHERE workspace_owner = ?").get(owner) as any)?.count || 0;
+        usersCount = (db.prepare("SELECT count(*) as count FROM app_users WHERE workspace_owner = ?").get(owner) as any)?.count || 0;
+        purchasesCount = (db.prepare("SELECT count(*) as count FROM purchases WHERE workspace_owner = ?").get(owner) as any)?.count || 0;
       } catch (dbErr) {
         // Fallback if table doesn't exist yet
       }
