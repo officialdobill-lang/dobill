@@ -1612,15 +1612,36 @@ async function startServer() {
     return null;
   };
 
-  // Helper to resolve workspace owner
+  // Helper to resolve workspace owner with strict ACL check
   const getWorkspaceOwner = (req: express.Request): string => {
-    const val = req.headers['x-workspace-owner'];
-    const activeVal = (val && typeof val === 'string' && val.trim().length > 0) ? val.trim().toLowerCase() : '';
+    const headerOwner = req.headers['x-workspace-owner'];
+    const headerAuth = req.headers['x-auth-email'];
+    
+    const activeVal = (headerOwner && typeof headerOwner === 'string' && headerOwner.trim().length > 0) ? headerOwner.trim().toLowerCase() : '';
+    const authEmail = (headerAuth && typeof headerAuth === 'string' && headerAuth.trim().length > 0) ? headerAuth.trim().toLowerCase() : '';
+
     if (activeVal && activeVal !== 'admin@dobill.com') {
-      return activeVal;
+      // If user is accessing their own workspace
+      if (!authEmail || authEmail === activeVal) {
+        return activeVal;
+      }
+      // Check if authEmail is approved colleague for activeVal workspace
+      try {
+        const approved = db.prepare("SELECT * FROM access_requests WHERE email = ? AND owner_email = ? AND status = 'approved'").get(authEmail, activeVal);
+        if (approved) {
+          return activeVal;
+        }
+      } catch (e) {}
+      // Unauthorized cross-workspace attempt: force authEmail's own workspace
+      return authEmail || activeVal;
     }
+
+    if (authEmail && authEmail !== 'admin@dobill.com') {
+      return authEmail;
+    }
+
     const master = getMasterOwnerEmail();
-    return master || activeVal || 'admin@dobill.com';
+    return master || activeVal || authEmail || 'admin@dobill.com';
   };
 
   // Helper to resolve authenticated user email
@@ -3531,8 +3552,8 @@ Thank you for choosing DO BILL.
       const pUnit = product.unit || 'pcs';
       const pImageUrl = product.imageUrl || product.image_url || null;
 
-      // Locate existing row from all products in workspace or DB
-      const allProducts = db.prepare('SELECT * FROM products').all() || [];
+      // Locate existing row from products in active workspace
+      const allProducts = db.prepare('SELECT * FROM products WHERE workspace_owner = ?').all(owner) || [];
       const existingRow = allProducts.find((r: any) => 
         (pId && (r.id === pId || r.product_id === pId)) ||
         (product.barcode && r.barcode === product.barcode)
@@ -3556,13 +3577,13 @@ Thank you for choosing DO BILL.
 
       const generatedCreatedAt = product.created_at || product.createdAt || (existingRow ? (existingRow.created_at || existingRow.createdAt) : null) || updatedAt;
 
-      // Unconditionally remove old instances by id or barcode to prevent duplicate rows on edit
-      db.prepare('DELETE FROM products WHERE product_id = ? OR id = ? OR barcode = ?')
-        .run(finalId, finalId, finalBarcode);
+      // Unconditionally remove old instances by id or barcode within workspace to prevent duplicate rows on edit
+      db.prepare('DELETE FROM products WHERE (product_id = ? OR id = ? OR barcode = ?) AND workspace_owner = ?')
+        .run(finalId, finalId, finalBarcode, owner);
 
       if (existingRow && existingRow.id && existingRow.id !== finalId) {
-        db.prepare('DELETE FROM products WHERE product_id = ? OR id = ?')
-          .run(existingRow.id, existingRow.id);
+        db.prepare('DELETE FROM products WHERE (product_id = ? OR id = ?) AND workspace_owner = ?')
+          .run(existingRow.id, existingRow.id, owner);
       }
 
       // Re-insert fresh, updated record
