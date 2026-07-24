@@ -3504,8 +3504,8 @@ Thank you for choosing DO BILL.
       const pUnit = product.unit || 'pcs';
       const pImageUrl = product.imageUrl || product.image_url || null;
 
-      // Locate existing row from all products in workspace or DB
-      const allProducts = db.prepare('SELECT * FROM products').all() || [];
+      // Locate existing row from products strictly within this workspace owner
+      const allProducts = db.prepare('SELECT * FROM products WHERE workspace_owner = ?').all(owner) || [];
       const existingRow = allProducts.find((r: any) => 
         (pId && (r.id === pId || r.product_id === pId)) ||
         (product.barcode && r.barcode === product.barcode)
@@ -3529,13 +3529,13 @@ Thank you for choosing DO BILL.
 
       const generatedCreatedAt = product.created_at || product.createdAt || (existingRow ? (existingRow.created_at || existingRow.createdAt) : null) || updatedAt;
 
-      // Unconditionally remove old instances by id or barcode to prevent duplicate rows on edit
-      db.prepare('DELETE FROM products WHERE product_id = ? OR id = ? OR barcode = ?')
-        .run(finalId, finalId, finalBarcode);
+      // Unconditionally remove old instances by id or barcode within this workspace only
+      db.prepare('DELETE FROM products WHERE (product_id = ? OR id = ? OR barcode = ?) AND workspace_owner = ?')
+        .run(finalId, finalId, finalBarcode, owner);
 
       if (existingRow && existingRow.id && existingRow.id !== finalId) {
-        db.prepare('DELETE FROM products WHERE product_id = ? OR id = ?')
-          .run(existingRow.id, existingRow.id);
+        db.prepare('DELETE FROM products WHERE (product_id = ? OR id = ?) AND workspace_owner = ?')
+          .run(existingRow.id, existingRow.id, owner);
       }
 
       // Re-insert fresh, updated record
