@@ -57,9 +57,7 @@ import Reports from '@/components/Reports';
 import SalesHistory from '@/components/SalesHistory';
 import UPISettings from '@/components/UPISettings';
 import ShopSettings from '@/components/ShopSettings';
-import ProjectBlueprint from '@/components/ProjectBlueprint';
 import { DirectPrintService } from '@/services/directPrintService';
-import { FileText } from 'lucide-react';
 
 import { RegistrationWizard } from '@/components/RegistrationWizard';
 import { SparklesCelebration } from '@/components/SparklesCelebration';
@@ -1833,7 +1831,6 @@ const AppContent = () => {
                 <SidebarItem icon={QrCode} label={t.upiSettings} path="/upi" active={location.pathname === '/upi'} />
               )}
               <SidebarItem icon={Settings} label={t.shopSettings} path="/settings" active={location.pathname === '/settings'} />
-              <SidebarItem icon={FileText} label="Project Blueprint" path="/blueprint" active={location.pathname === '/blueprint'} />
             </nav>
           </div>
 
@@ -1935,7 +1932,6 @@ const AppContent = () => {
               {location.pathname === '/reports' && t.reports}
               {location.pathname === '/upi' && t.upiSettings}
               {location.pathname === '/settings' && t.shopSettings}
-              {location.pathname === '/blueprint' && "Project Blueprint (8 Points)"}
             </h2>
           </div>
           
@@ -2002,7 +1998,6 @@ const AppContent = () => {
             <Route path="/reports" element={<Reports />} />
             <Route path="/upi" element={<UPISettings />} />
             <Route path="/settings" element={<ShopSettings />} />
-            <Route path="/blueprint" element={<ProjectBlueprint />} />
           </Routes>
         </div>
       </main>
