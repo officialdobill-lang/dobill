@@ -200,8 +200,6 @@ function resolveValueExpr(valStr: string, row: any, params: any[]): any {
   if (clean.toUpperCase() === 'FALSE') return false;
   if (clean.toUpperCase() === 'NULL') return null;
   
-  if (!row) return undefined;
-
   let colKey = clean.toLowerCase();
   if (colKey.includes('.')) {
     colKey = colKey.split('.')[1];
@@ -209,31 +207,6 @@ function resolveValueExpr(valStr: string, row: any, params: any[]): any {
   if (row[colKey] !== undefined) {
     return row[colKey];
   }
-  for (const k of Object.keys(row)) {
-    if (k.toLowerCase() === colKey) {
-      return row[k];
-    }
-  }
-
-  if (colKey === 'stockquantity' || colKey === 'stock_quantity') {
-    if (row.stockQuantity !== undefined) return row.stockQuantity;
-    if (row.stock_quantity !== undefined) return row.stock_quantity;
-    if (row.stockquantity !== undefined) return row.stockquantity;
-    return 0;
-  }
-  if (colKey === 'purchaseprice' || colKey === 'purchase_price') {
-    if (row.purchasePrice !== undefined) return row.purchasePrice;
-    if (row.purchase_price !== undefined) return row.purchase_price;
-    if (row.purchaseprice !== undefined) return row.purchaseprice;
-    return 0;
-  }
-  if (colKey === 'sellingprice' || colKey === 'selling_price') {
-    if (row.sellingPrice !== undefined) return row.sellingPrice;
-    if (row.selling_price !== undefined) return row.selling_price;
-    if (row.sellingprice !== undefined) return row.sellingprice;
-    return 0;
-  }
-
   return undefined;
 }
 
@@ -1612,37 +1585,15 @@ async function startServer() {
     return null;
   };
 
-  // Helper to resolve workspace owner with strict ACL check
+  // Helper to resolve workspace owner
   const getWorkspaceOwner = (req: express.Request): string => {
-    const headerOwner = req.headers['x-workspace-owner'];
-    const headerAuth = req.headers['x-auth-email'];
-    
-    const activeVal = (headerOwner && typeof headerOwner === 'string' && headerOwner.trim().length > 0) ? headerOwner.trim().toLowerCase() : '';
-    const authEmail = (headerAuth && typeof headerAuth === 'string' && headerAuth.trim().length > 0) ? headerAuth.trim().toLowerCase() : '';
-
-    // If an explicit logged in user email is present:
-    if (authEmail && authEmail !== 'admin@dobill.com') {
-      // If user is requesting access to a different target workspace (activeVal):
-      if (activeVal && activeVal !== authEmail && activeVal !== 'admin@dobill.com') {
-        try {
-          const approved = db.prepare("SELECT * FROM access_requests WHERE email = ? AND owner_email = ? AND status = 'approved'").get(authEmail, activeVal);
-          if (approved) {
-            return activeVal;
-          }
-        } catch (e) {}
-        // Unauthorized cross-workspace attempt -> force user's own workspace
-        return authEmail;
-      }
-      return authEmail;
-    }
-
-    // Unauthenticated user or default guest/admin session:
+    const val = req.headers['x-workspace-owner'];
+    const activeVal = (val && typeof val === 'string' && val.trim().length > 0) ? val.trim().toLowerCase() : '';
     if (activeVal && activeVal !== 'admin@dobill.com') {
-      // Trying to access another user's workspace without authentication -> block access
-      return 'admin@dobill.com';
+      return activeVal;
     }
-
-    return 'admin@dobill.com';
+    const master = getMasterOwnerEmail();
+    return master || activeVal || 'admin@dobill.com';
   };
 
   // Helper to resolve authenticated user email
@@ -1652,7 +1603,8 @@ async function startServer() {
     if (activeVal && activeVal !== 'admin@dobill.com') {
       return activeVal;
     }
-    return 'admin@dobill.com';
+    const master = getMasterOwnerEmail();
+    return master || activeVal || 'admin@dobill.com';
   };
 
   // Helper to verify & automatically seed new workspace databases on the fly
@@ -1819,11 +1771,10 @@ async function startServer() {
       let purchasesCount = 0;
 
       try {
-        const owner = getWorkspaceOwner(req);
-        productsCount = (db.prepare("SELECT count(*) as count FROM products WHERE workspace_owner = ?").get(owner) as any)?.count || 0;
-        salesCount = (db.prepare("SELECT count(*) as count FROM sales WHERE workspace_owner = ?").get(owner) as any)?.count || 0;
-        usersCount = (db.prepare("SELECT count(*) as count FROM app_users WHERE workspace_owner = ?").get(owner) as any)?.count || 0;
-        purchasesCount = (db.prepare("SELECT count(*) as count FROM purchases WHERE workspace_owner = ?").get(owner) as any)?.count || 0;
+        productsCount = (db.prepare("SELECT count(*) as count FROM products").get() as any)?.count || 0;
+        salesCount = (db.prepare("SELECT count(*) as count FROM sales").get() as any)?.count || 0;
+        usersCount = (db.prepare("SELECT count(*) as count FROM app_users").get() as any)?.count || 0;
+        purchasesCount = (db.prepare("SELECT count(*) as count FROM purchases").get() as any)?.count || 0;
       } catch (dbErr) {
         // Fallback if table doesn't exist yet
       }
@@ -3553,8 +3504,8 @@ Thank you for choosing DO BILL.
       const pUnit = product.unit || 'pcs';
       const pImageUrl = product.imageUrl || product.image_url || null;
 
-      // Locate existing row from products in active workspace
-      const allProducts = db.prepare('SELECT * FROM products WHERE workspace_owner = ?').all(owner) || [];
+      // Locate existing row from all products in workspace or DB
+      const allProducts = db.prepare('SELECT * FROM products').all() || [];
       const existingRow = allProducts.find((r: any) => 
         (pId && (r.id === pId || r.product_id === pId)) ||
         (product.barcode && r.barcode === product.barcode)
@@ -3578,13 +3529,13 @@ Thank you for choosing DO BILL.
 
       const generatedCreatedAt = product.created_at || product.createdAt || (existingRow ? (existingRow.created_at || existingRow.createdAt) : null) || updatedAt;
 
-      // Unconditionally remove old instances by id or barcode within workspace to prevent duplicate rows on edit
-      db.prepare('DELETE FROM products WHERE (product_id = ? OR id = ? OR barcode = ?) AND workspace_owner = ?')
-        .run(finalId, finalId, finalBarcode, owner);
+      // Unconditionally remove old instances by id or barcode to prevent duplicate rows on edit
+      db.prepare('DELETE FROM products WHERE product_id = ? OR id = ? OR barcode = ?')
+        .run(finalId, finalId, finalBarcode);
 
       if (existingRow && existingRow.id && existingRow.id !== finalId) {
-        db.prepare('DELETE FROM products WHERE (product_id = ? OR id = ?) AND workspace_owner = ?')
-          .run(existingRow.id, existingRow.id, owner);
+        db.prepare('DELETE FROM products WHERE product_id = ? OR id = ?')
+          .run(existingRow.id, existingRow.id);
       }
 
       // Re-insert fresh, updated record
@@ -3643,9 +3594,7 @@ Thank you for choosing DO BILL.
 
     // Enforce strict stock validation for all sale items
     for (const item of sale.items) {
-      const prodId = item.id || item.product_id;
-      const barcode = item.barcode || prodId;
-      const prod = db.prepare('SELECT stockQuantity, stock_quantity, name FROM products WHERE (id = ? OR product_id = ? OR barcode = ?) AND workspace_owner = ?').get(prodId, prodId, barcode, owner) as { stockQuantity: number, stock_quantity: number, name: string } | undefined;
+      const prod = db.prepare('SELECT stockQuantity, stock_quantity, name FROM products WHERE (id = ? OR product_id = ?) AND workspace_owner = ?').get(item.id, item.id, owner) as { stockQuantity: number, stock_quantity: number, name: string } | undefined;
       const available = prod ? (prod.stockQuantity !== undefined && prod.stockQuantity !== null ? prod.stockQuantity : (prod.stock_quantity ?? 0)) : 0;
       if (!prod || available < item.quantity) {
         res.status(400).json({ 
@@ -3680,16 +3629,15 @@ Thank you for choosing DO BILL.
         owner
       );
 
-      // Deduct Stock from product
+      // Deduct Stock from both stockQuantity and stock_quantity columns
       const updateStock = db.prepare(`
         UPDATE products 
-        SET stockQuantity = stockQuantity - ?
-        WHERE (id = ? OR product_id = ? OR barcode = ?) AND workspace_owner = ?
+        SET stockQuantity = stockQuantity - ?,
+            stock_quantity = stock_quantity - ?
+        WHERE (id = ? OR product_id = ?) AND workspace_owner = ?
       `);
       sale.items.forEach((item: any) => {
-        const prodId = item.id || item.product_id;
-        const barcode = item.barcode || prodId;
-        updateStock.run(item.quantity, prodId, prodId, barcode, owner);
+        updateStock.run(item.quantity, item.quantity, item.id, item.id, owner);
       });
 
       return { id, invoiceNumber, createdAt };
@@ -3742,17 +3690,15 @@ Thank you for choosing DO BILL.
         );
 
         // Update Stock of the products (Purchasing items INCREMENTS stock_quantity!)
-        const updateStock = db.prepare('UPDATE products SET stockQuantity = stockQuantity + ? WHERE (id = ? OR product_id = ? OR barcode = ?) AND workspace_owner = ?');
+        const updateStock = db.prepare('UPDATE products SET stockQuantity = stockQuantity + ?, stock_quantity = stock_quantity + ? WHERE (id = ? OR product_id = ?) AND workspace_owner = ?');
         
         // Let's also update the product's purchasePrice to the latest purchase price entered on-the-fly!
-        const updatePurchasePrice = db.prepare('UPDATE products SET purchasePrice = ? WHERE (id = ? OR product_id = ? OR barcode = ?) AND workspace_owner = ?');
+        const updatePurchasePrice = db.prepare('UPDATE products SET purchasePrice = ?, purchase_price = ? WHERE (id = ? OR product_id = ?) AND workspace_owner = ?');
 
         purchase.items.forEach((item: any) => {
-          const prodId = item.id || item.product_id;
-          const barcode = item.barcode || prodId;
-          updateStock.run(item.quantity, prodId, prodId, barcode, owner);
+          updateStock.run(item.quantity, item.quantity, item.id, item.id, owner);
           if (item.purchasePrice > 0) {
-            updatePurchasePrice.run(item.purchasePrice, prodId, prodId, barcode, owner);
+            updatePurchasePrice.run(item.purchasePrice, item.purchasePrice, item.id, item.id, owner);
           }
         });
 
