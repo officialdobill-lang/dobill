@@ -200,6 +200,8 @@ function resolveValueExpr(valStr: string, row: any, params: any[]): any {
   if (clean.toUpperCase() === 'FALSE') return false;
   if (clean.toUpperCase() === 'NULL') return null;
   
+  if (!row) return undefined;
+
   let colKey = clean.toLowerCase();
   if (colKey.includes('.')) {
     colKey = colKey.split('.')[1];
@@ -207,6 +209,31 @@ function resolveValueExpr(valStr: string, row: any, params: any[]): any {
   if (row[colKey] !== undefined) {
     return row[colKey];
   }
+  for (const k of Object.keys(row)) {
+    if (k.toLowerCase() === colKey) {
+      return row[k];
+    }
+  }
+
+  if (colKey === 'stockquantity' || colKey === 'stock_quantity') {
+    if (row.stockQuantity !== undefined) return row.stockQuantity;
+    if (row.stock_quantity !== undefined) return row.stock_quantity;
+    if (row.stockquantity !== undefined) return row.stockquantity;
+    return 0;
+  }
+  if (colKey === 'purchaseprice' || colKey === 'purchase_price') {
+    if (row.purchasePrice !== undefined) return row.purchasePrice;
+    if (row.purchase_price !== undefined) return row.purchase_price;
+    if (row.purchaseprice !== undefined) return row.purchaseprice;
+    return 0;
+  }
+  if (colKey === 'sellingprice' || colKey === 'selling_price') {
+    if (row.sellingPrice !== undefined) return row.sellingPrice;
+    if (row.selling_price !== undefined) return row.selling_price;
+    if (row.sellingprice !== undefined) return row.sellingprice;
+    return 0;
+  }
+
   return undefined;
 }
 
